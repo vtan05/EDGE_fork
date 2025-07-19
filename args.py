@@ -3,20 +3,20 @@ import argparse
 
 def parse_train_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--project", default="runs/train", help="project/name")
-    parser.add_argument("--exp_name", default="exp", help="save to project/name")
-    parser.add_argument("--data_path", type=str, default="data/", help="raw data path")
+    parser.add_argument("--project", default="/host_data/van/EDGE/model/finedance", help="project/name")
+    parser.add_argument("--exp_name", default="exp/finedance", help="save to project/name")
+    parser.add_argument("--data_path", type=str, default="/host_data/van/EDGE/data/finedance/", help="raw data path")
     parser.add_argument(
         "--processed_data_dir",
         type=str,
-        default="data/dataset_backups/",
+        default="/host_data/van/EDGE/data/dataset_backups/",
         help="Dataset backup path",
     )
     parser.add_argument(
-        "--render_dir", type=str, default="renders/", help="Sample render path"
+        "--render_dir", type=str, default="/host_data/van/EDGE/model/finedance/renders/", help="Sample render path"
     )
 
-    parser.add_argument("--feature_type", type=str, default="jukebox")
+    parser.add_argument("--feature_type", type=str, default="baseline")
     parser.add_argument(
         "--wandb_pj_name", type=str, default="EDGE", help="project name"
     )
@@ -44,16 +44,16 @@ def parse_train_opt():
 
 def parse_test_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--feature_type", type=str, default="jukebox")
-    parser.add_argument("--out_length", type=float, default=30, help="max. length of output, in seconds")
+    parser.add_argument("--feature_type", type=str, default="baseline")
+    parser.add_argument("--out_length", type=float, default=30, help="max. length of output, in seconds") ##### revise for inference
     parser.add_argument(
         "--processed_data_dir",
         type=str,
-        default="data/dataset_backups/",
+        default="/host_data/van/EDGE/data/finedance/",
         help="Dataset backup path",
     )
     parser.add_argument(
-        "--render_dir", type=str, default="renders/", help="Sample render path"
+        "--render_dir", type=str, default="/host_data/van/EDGE/model/finedance/renders/", help="Sample render path"
     )
     parser.add_argument(
         "--checkpoint", type=str, default="checkpoint.pt", help="checkpoint"
@@ -61,7 +61,7 @@ def parse_test_opt():
     parser.add_argument(
         "--music_dir",
         type=str,
-        default="data/test/wavs",
+        default="/host_data/van/EDGE/data/finedance/test/wavs_sliced",
         help="folder containing input music",
     )
     parser.add_argument(
@@ -70,7 +70,7 @@ def parse_test_opt():
     parser.add_argument(
         "--motion_save_dir",
         type=str,
-        default="eval/motions",
+        default="/host_data/van/EDGE/results/finedance/",
         help="Where to save the motions",
     )
     parser.add_argument(

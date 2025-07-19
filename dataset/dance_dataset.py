@@ -8,14 +8,36 @@ from typing import Any
 
 import numpy as np
 import torch
-from pytorch3d.transforms import (RotateAxisAngle, axis_angle_to_quaternion,
+from pytorch3d.transforms.rotation_conversions import (axis_angle_to_quaternion,
                                   quaternion_multiply,
                                   quaternion_to_axis_angle)
+from pytorch3d.transforms.transform3d import (RotateAxisAngle)
 from torch.utils.data import Dataset
 
 from dataset.preprocess import Normalizer, vectorize_many
-from dataset.quaternion import ax_to_6v
+from dataset.quaternion import ax_to_6v, ax_from_6v
 from vis import SMPLSkeleton
+from smplx_fk import SMPLX_Skeleton
+
+
+def set_on_ground(root_pos, local_q_156, smplx_model):
+    # root_pos = root_pos[:, :] - root_pos[:1, :]
+    floor_height = 0
+    length = root_pos.shape[0]
+    # model_q = model_q.view(b*s, -1)
+    # model_x = model_x.view(-1, 3)
+    positions = smplx_model.forward(local_q_156, root_pos)
+    positions = positions.view(length, -1, 3)   # bxt, j, 3
+    
+    l_toe_h = positions[0, 10, 1] - floor_height
+    r_toe_h = positions[0, 11, 1] - floor_height
+    if abs(l_toe_h - r_toe_h) < 0.02:
+        height = (l_toe_h + r_toe_h)/2
+    else:
+        height = min(l_toe_h, r_toe_h)
+    root_pos[:, 1] = root_pos[:, 1] - height
+
+    return root_pos, local_q_156
 
 
 class AISTPPDataset(Dataset):
@@ -24,7 +46,7 @@ class AISTPPDataset(Dataset):
         data_path: str,
         backup_path: str,
         train: bool,
-        feature_type: str = "jukebox",
+        feature_type: str = "baseline",
         normalizer: Any = None,
         data_len: int = -1,
         include_contacts: bool = True,
@@ -55,6 +77,7 @@ class AISTPPDataset(Dataset):
         # load raw data
         if not force_reload and pickle_name in os.listdir(backup_path):
             print("Using cached dataset...")
+            print(f"Loading {self.name} dataset from {backup_path / pickle_name}")
             with open(os.path.join(backup_path, pickle_name), "rb") as f:
                 data = pickle.load(f)
         else:
@@ -103,6 +126,7 @@ class AISTPPDataset(Dataset):
 
         motion_path = os.path.join(split_data_path, "motions_sliced")
         sound_path = os.path.join(split_data_path, f"{self.feature_type}_feats")
+        # print(f"Loading data from {motion_path} and {sound_path}")
         wav_path = os.path.join(split_data_path, f"wavs_sliced")
         # sort motions and sounds
         motions = sorted(glob.glob(os.path.join(motion_path, "*.pkl")))
@@ -114,6 +138,7 @@ class AISTPPDataset(Dataset):
         all_q = []
         all_names = []
         all_wavs = []
+        print(f"Found {len(motions)} motions, {len(features)} features, and {len(wavs)} wavs")
         assert len(motions) == len(features)
         for motion, feature, wav in zip(motions, features, wavs):
             # make sure name is matching
@@ -139,44 +164,48 @@ class AISTPPDataset(Dataset):
         data = {"pos": all_pos, "q": all_q, "filenames": all_names, "wavs": all_wavs}
         return data
 
-    def process_dataset(self, root_pos, local_q):
+    def process_dataset(self, root_pos, local_q): #### Revised for Finedance
         # FK skeleton
-        smpl = SMPLSkeleton()
-        # to Tensor
-        root_pos = torch.Tensor(root_pos)
-        local_q = torch.Tensor(local_q)
-        # to ax
-        bs, sq, c = local_q.shape
-        local_q = local_q.reshape((bs, sq, -1, 3))
+        smplx_model = SMPLX_Skeleton()
+        # Step 2: Convert to tensor and reshape
+        root_pos = torch.Tensor(root_pos)          # [T, 3]
+        bs, seq_len, _ = root_pos.shape
+        root_pos = root_pos.view(bs * seq_len, 3)
+        local_q = torch.Tensor(local_q).view(-1, 52, 6)  # [T, 52, 6]
+        local_q = ax_from_6v(local_q)              # [T, 52, 3]
+        length = root_pos.shape[0]
+        local_q = local_q.view(length, -1, 3)  
+        print("local_q", local_q.shape)
 
-        # AISTPP dataset comes y-up - rotate to z-up to standardize against the pretrain dataset
-        root_q = local_q[:, :, :1, :]  # sequence x 1 x 3
-        root_q_quat = axis_angle_to_quaternion(root_q)
-        rotation = torch.Tensor(
-            [0.7071068, 0.7071068, 0, 0]
-        )  # 90 degrees about the x axis
-        root_q_quat = quaternion_multiply(rotation, root_q_quat)
-        root_q = quaternion_to_axis_angle(root_q_quat)
-        local_q[:, :, :1, :] = root_q
+        # Step 3: Set root on ground
+        local_q_156 = local_q.view(bs * seq_len, 156)
+        root_pos, local_q_156 = set_on_ground(root_pos, local_q_156, smplx_model)
 
-        # don't forget to rotate the root position too 😩
-        pos_rotation = RotateAxisAngle(90, axis="X", degrees=True)
-        root_pos = pos_rotation.transform_points(
-            root_pos
-        )  # basically (y, z) -> (-z, y), expressed as a rotation for readability
+        # Step 4: Forward kinematics
+        positions = smplx_model.forward(local_q_156, root_pos)  # [T, J, 3]
+        positions = positions.view(length, -1, 3)
 
-        # do FK
-        positions = smpl.forward(local_q, root_pos)  # batch x sequence x 24 x 3
-        feet = positions[:, :, (7, 8, 10, 11)]
-        feetv = torch.zeros(feet.shape[:3])
-        feetv[:, :-1] = (feet[:, 1:] - feet[:, :-1]).norm(dim=-1)
-        contacts = (feetv < 0.01).to(local_q)  # cast to right dtype
+        # Step 5: Contact detection
+        feet = positions[:, (7, 8, 10, 11)]  # [T, 4, 3]: L-ankle, R-ankle, L-toe, R-toe
+        contacts_ankle = (feet[:, :2, 1] < 0.12).to(local_q_156)  # Ankle Y < 0.12
+        contacts_toe = (feet[:, 2:, 1] < 0.05).to(local_q_156)    # Toe Y < 0.05
+        contacts = torch.cat([contacts_ankle, contacts_toe], dim=-1)  # [T, 4]
 
-        # to 6d
-        local_q = ax_to_6v(local_q)
+        # Step 6: Flatten and convert back to 6D
+        local_q_156 = local_q_156.view(length, 52, 3)             # [T, 52, 3]
+        local_q_312 = ax_to_6v(local_q_156).view(length, 312)     # [T, 312]
+
+        # Reshape all inputs to [B, T, D]
+        contacts = contacts.view(bs, seq_len, -1).float().detach()
+        root_pos = root_pos.view(bs, seq_len, -1).float().detach()
+        local_q_312 = local_q_312.view(bs, seq_len, -1).float().detach()
+
+        print("contacts.shape", contacts.shape)
+        print("root_pos.shape", root_pos.shape)
+        print("local_q_312.shape", local_q_312.shape)
 
         # now, flatten everything into: batch x sequence x [...]
-        l = [contacts, root_pos, local_q]
+        l = [contacts, root_pos, local_q_312]
         global_pose_vec_input = vectorize_many(l).float().detach()
 
         # normalize the data. Both train and test need the same normalizer.

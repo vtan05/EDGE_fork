@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import reduce
 from p_tqdm import p_map
-from pytorch3d.transforms import (axis_angle_to_quaternion,
+from pytorch3d.transforms.rotation_conversions import (axis_angle_to_quaternion,
                                   quaternion_to_axis_angle)
 from tqdm import tqdm
 
@@ -590,7 +590,11 @@ class GaussianDiffusion(nn.Module):
         # do the FK all at once
         b, s, c = samples.shape
         pos = samples[:, :, :3].to(cond.device)  # np.zeros((sample.shape[0], 3))
-        q = samples[:, :, 3:].reshape(b, s, 24, 6)
+        rot_dim = samples.shape[-1] - 3  # remove root pos
+        joint_count = (rot_dim - 4) // 6
+        print(f"Rendering {b} samples with {s} timesteps and {joint_count} joints")
+        q = samples[:, :, 3:-4].reshape(b, s, joint_count, 6)  # → [2, 150, 52, 6]
+        # q = samples[:, :, 3:].reshape(b, s, joint_count, 6) ### AIST
         # go 6d to ax
         q = ax_from_6v(q).to(cond.device)
 
@@ -648,7 +652,7 @@ class GaussianDiffusion(nn.Module):
                 full_q = q
             full_pose = (
                 self.smpl.forward(full_q, full_pos).detach().cpu().numpy()
-            )  # b, s, 24, 3
+            )  # b, s, 22, 3
             # squeeze the batch dimension away and render
             skeleton_render(
                 full_pose[0],

@@ -45,7 +45,8 @@ class EDGE:
         use_baseline_feats = feature_type == "baseline"
 
         pos_dim = 3
-        rot_dim = 24 * 6  # 24 joints, 6dof
+        # rot_dim = 24 * 6  # 24 joints, 6dof #### AIST
+        rot_dim = 52 * 6  ##### Finedance
         self.repr_dim = repr_dim = pos_dim + rot_dim + 4
 
         feature_dim = 35 if use_baseline_feats else 4800
@@ -129,8 +130,10 @@ class EDGE:
             and os.path.isfile(train_tensor_dataset_path)
             and os.path.isfile(test_tensor_dataset_path)
         ):
-            train_dataset = pickle.load(open(train_tensor_dataset_path, "rb"))
-            test_dataset = pickle.load(open(test_tensor_dataset_path, "rb"))
+            # train_dataset = pickle.load(open(train_tensor_dataset_path, "rb"))
+            # test_dataset = pickle.load(open(test_tensor_dataset_path, "rb"))
+            train_dataset = torch.load(train_tensor_dataset_path)
+            test_dataset = torch.load(test_tensor_dataset_path)
         else:
             train_dataset = AISTPPDataset(
                 data_path=opt.data_path,
@@ -147,8 +150,10 @@ class EDGE:
             )
             # cache the dataset in case
             if self.accelerator.is_main_process:
-                pickle.dump(train_dataset, open(train_tensor_dataset_path, "wb"))
-                pickle.dump(test_dataset, open(test_tensor_dataset_path, "wb"))
+                # pickle.dump(train_dataset, open(train_tensor_dataset_path, "wb"))
+                # pickle.dump(test_dataset, open(test_tensor_dataset_path, "wb"))
+                torch.save(train_dataset, train_tensor_dataset_path)
+                torch.save(test_dataset, test_tensor_dataset_path)
 
         # set normalizer
         self.normalizer = test_dataset.normalizer
@@ -183,6 +188,7 @@ class EDGE:
         if self.accelerator.is_main_process:
             save_dir = str(increment_path(Path(opt.project) / opt.exp_name))
             opt.exp_name = save_dir.split("/")[-1]
+            wandb.login(key="9c8bad86ebfde1db64a1aa10a5b1f28e8d3fa76f") 
             wandb.init(project=opt.wandb_pj_name, name=opt.exp_name)
             save_dir = Path(save_dir)
             wdir = save_dir / "weights"

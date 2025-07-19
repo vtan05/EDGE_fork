@@ -10,7 +10,7 @@ import soundfile as sf
 import torch
 from matplotlib import cm
 from matplotlib.colors import ListedColormap
-from pytorch3d.transforms import (axis_angle_to_quaternion, quaternion_apply,
+from pytorch3d.transforms.rotation_conversions import (axis_angle_to_quaternion, quaternion_apply,
                                   quaternion_multiply)
 from tqdm import tqdm
 
@@ -331,3 +331,5 @@ class SMPLSkeleton:
                     rotations_world.append(None)
 
         return torch.stack(positions_world, dim=3).permute(0, 1, 3, 2)
+
+
