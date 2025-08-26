@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 
 from dataset.preprocess import Normalizer, vectorize_many
 from dataset.quaternion import ax_to_6v, ax_from_6v
-from vis import SMPLSkeleton
+# from vis import SMPLSkeleton
 from smplx_fk import SMPLX_Skeleton
 
 
@@ -53,10 +53,11 @@ class AISTPPDataset(Dataset):
         force_reload: bool = False,
     ):
         self.data_path = data_path
-        self.raw_fps = 60
+        # self.raw_fps = 60 ### AIST++ raw fps
+        self.raw_fps = 30 ### Finedance raw fps
         self.data_fps = 30
         assert self.data_fps <= self.raw_fps
-        self.data_stride = self.raw_fps // self.data_fps
+        # self.data_stride = self.raw_fps // self.data_fps
 
         self.train = train
         self.name = "Train" if self.train else "Test"
@@ -158,54 +159,62 @@ class AISTPPDataset(Dataset):
         all_pos = np.array(all_pos)  # N x seq x 3
         all_q = np.array(all_q)  # N x seq x (joint * 3)
         # downsample the motions to the data fps
-        print(all_pos.shape)
-        all_pos = all_pos[:, :: self.data_stride, :]
-        all_q = all_q[:, :: self.data_stride, :]
+        # print(all_pos.shape)
+        # all_pos = all_pos[:, :: self.data_stride, :]
+        # all_q = all_q[:, :: self.data_stride, :]
         data = {"pos": all_pos, "q": all_q, "filenames": all_names, "wavs": all_wavs}
         return data
 
     def process_dataset(self, root_pos, local_q): #### Revised for Finedance
         # FK skeleton
         smplx_model = SMPLX_Skeleton()
-        # Step 2: Convert to tensor and reshape
-        root_pos = torch.Tensor(root_pos)          # [T, 3]
+        # Step 1: Prepare tensors
+        root_pos = torch.Tensor(root_pos)          # [B, T, 3]
         bs, seq_len, _ = root_pos.shape
         root_pos = root_pos.view(bs * seq_len, 3)
+
+        # ↓↓↓ Select only 22 SMPL joints before converting to axis-angle ↓↓↓
+        # List of 22 commonly used SMPL joint indices
+        body_joint_indices = [0, 1, 2, 3, 6, 9, 12, 13, 14, 15, 16, 17, 18,
+                      19, 20, 21, 4, 5, 7, 8, 10, 11]  # SMPL 22-joint set
+
+        # Step 2: Reduce to 22 joints
         local_q = torch.Tensor(local_q).view(-1, 52, 6)  # [T, 52, 6]
-        local_q = ax_from_6v(local_q)              # [T, 52, 3]
-        length = root_pos.shape[0]
-        local_q = local_q.view(length, -1, 3)  
-        print("local_q", local_q.shape)
+        local_q = local_q[:, body_joint_indices, :]      # [T, 22, 6]
+        local_q = ax_from_6v(local_q)                    # [T, 22, 3]
 
         # Step 3: Set root on ground
-        local_q_156 = local_q.view(bs * seq_len, 156)
-        root_pos, local_q_156 = set_on_ground(root_pos, local_q_156, smplx_model)
+        length = root_pos.shape[0]
+        local_q_66 = local_q.view(bs * seq_len, 66)
+        root_pos, local_q_66 = set_on_ground(root_pos, local_q_66, smplx_model)
 
-        # Step 4: Forward kinematics
-        positions = smplx_model.forward(local_q_156, root_pos)  # [T, J, 3]
-        positions = positions.view(length, -1, 3)
+        # Step 4: Forward kinematics (requires full 52 joints → pad back)
+        full_local_q = torch.zeros((length, 52, 3), device=local_q.device)
+        full_local_q[:, body_joint_indices] = local_q.view(length, 22, 3)
+        positions = smplx_model.forward(full_local_q.view(length, 156), root_pos)
+        positions = positions.view(length, -1, 3)  # [T, J, 3]
 
-        # Step 5: Contact detection
-        feet = positions[:, (7, 8, 10, 11)]  # [T, 4, 3]: L-ankle, R-ankle, L-toe, R-toe
-        contacts_ankle = (feet[:, :2, 1] < 0.12).to(local_q_156)  # Ankle Y < 0.12
-        contacts_toe = (feet[:, 2:, 1] < 0.05).to(local_q_156)    # Toe Y < 0.05
+        # Step 5: Contact detection (same joint indices)
+        feet = positions[:, (7, 8, 10, 11)]  # [T, 4, 3]: L/R ankle and toe
+        contacts_ankle = (feet[:, :2, 1] < 0.12).to(local_q.device)
+        contacts_toe = (feet[:, 2:, 1] < 0.05).to(local_q.device)
         contacts = torch.cat([contacts_ankle, contacts_toe], dim=-1)  # [T, 4]
 
-        # Step 6: Flatten and convert back to 6D
-        local_q_156 = local_q_156.view(length, 52, 3)             # [T, 52, 3]
-        local_q_312 = ax_to_6v(local_q_156).view(length, 312)     # [T, 312]
+        # Step 6: Convert back to 6D using only 22 joints
+        local_q_22 = local_q.view(length, 22, 3)
+        local_q_132 = ax_to_6v(local_q_22).view(length, 132)  # [T, 132]
 
-        # Reshape all inputs to [B, T, D]
+        # Step 7: Reshape everything back to [B, T, D]
         contacts = contacts.view(bs, seq_len, -1).float().detach()
         root_pos = root_pos.view(bs, seq_len, -1).float().detach()
-        local_q_312 = local_q_312.view(bs, seq_len, -1).float().detach()
+        local_q_132 = local_q_132.view(bs, seq_len, -1).float().detach()
 
-        print("contacts.shape", contacts.shape)
-        print("root_pos.shape", root_pos.shape)
-        print("local_q_312.shape", local_q_312.shape)
+        print("contacts.shape", contacts.shape)       # [B, T, 4]
+        print("root_pos.shape", root_pos.shape)       # [B, T, 3]
+        print("local_q_132.shape", local_q_132.shape) # [B, T, 132]
 
         # now, flatten everything into: batch x sequence x [...]
-        l = [contacts, root_pos, local_q_312]
+        l = [contacts, root_pos, local_q_132]
         global_pose_vec_input = vectorize_many(l).float().detach()
 
         # normalize the data. Both train and test need the same normalizer.

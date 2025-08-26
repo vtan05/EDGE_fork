@@ -20,6 +20,7 @@ def calc_physical_score(dir):
         it = random.sample(it, 1000)
     for pkl in tqdm(it):
         info = pickle.load(open(pkl, "rb"))
+        print(np.min(info["full_pose"]), np.max(info["full_pose"]))
         joint3d = info["full_pose"]
         root_v = (joint3d[1:, 0, :] - joint3d[:-1, 0, :]) / DT  # root velocity (S-1, 3)
         root_a = (root_v[1:] - root_v[:-1]) / DT  # (S-2, 3) root accelerations
@@ -50,14 +51,45 @@ def calc_physical_score(dir):
     out = np.mean(scores) * 10000
     print(f"{dir} has a mean PFC of {out}")
 
+# === Jitter from PKL motion ===
+def measure_jitter(joint_pos, fps):
+    vel = (joint_pos[1:] - joint_pos[:-1]) * fps
+    acc = (vel[1:] - vel[:-1]) * fps
+    jitter = np.mean(np.linalg.norm(acc, axis=-1))
+    return jitter
+
+
+def measure_jitter_from_pkl(dir: str, fps: int = 30):
+    print("Computing jitter metric from .pkl files:")
+    file_list = glob.glob(os.path.join(dir, "*.pkl"))
+    if len(file_list) > 1000:
+        file_list = random.sample(file_list, 1000)
+
+    total_jitter = np.zeros([len(file_list)])
+
+    for i, fname in enumerate(tqdm(file_list, desc="Computing Jitter")):
+        info = pickle.load(open(fname, "rb"))
+        joint_pos = info["full_pose"] #* 0.01  # Convert to meters
+        jitter = measure_jitter(joint_pos, fps)
+        total_jitter[i] = jitter
+
+    jitter_mean = total_jitter.mean()
+    print(f"Total mean jitter of {len(file_list)} motions: {jitter_mean:.6f}")
+
 
 def parse_eval_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--motion_path",
         type=str,
-        default="motions/",
+        default="/host_data/van/EDGE/results/finedance/",
         help="Where to load saved motions",
+    )
+    parser.add_argument(
+        "--fps",
+        type=int,
+        default=30,
+        help="FPS of the motion data (used in jitter calc)",
     )
     opt = parser.parse_args()
     return opt
@@ -66,3 +98,4 @@ def parse_eval_opt():
 if __name__ == "__main__":
     opt = parse_eval_opt()
     calc_physical_score(opt.motion_path)
+    measure_jitter_from_pkl(opt.motion_path, opt.fps)

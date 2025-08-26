@@ -53,10 +53,10 @@ def parse_test_opt():
         help="Dataset backup path",
     )
     parser.add_argument(
-        "--render_dir", type=str, default="/host_data/van/EDGE/model/finedance/renders/", help="Sample render path"
+        "--render_dir", type=str, default="/host_data/van/EDGE/model/finedance/renders/test_finedance/", help="Sample render path"
     )
     parser.add_argument(
-        "--checkpoint", type=str, default="checkpoint.pt", help="checkpoint"
+        "--checkpoint", type=str, default="/host_data/van/EDGE/model/finedance/exp/finedance/weights/train-800.pt", help="checkpoint"
     )
     parser.add_argument(
         "--music_dir",

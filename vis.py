@@ -142,6 +142,8 @@ def plot_single_pose(num, poses, lines, ax, axrange, scat, contact):
             continue
         # stack to create a line
         data = np.stack((pose[i], pose[p]), axis=0)
+        data = data.copy()
+        data[:, [1, 2]] = data[:, [2, 1]]  # Swap Y and Z
         set_line_data_3d(line, data)
 
     if num == 0:

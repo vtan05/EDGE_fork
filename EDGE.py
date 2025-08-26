@@ -18,6 +18,7 @@ from model.adan import Adan
 from model.diffusion import GaussianDiffusion
 from model.model import DanceDecoder
 from vis import SMPLSkeleton
+# from smplx_fk import SMPLX_Skeleton
 
 
 def wrap(x):
@@ -46,7 +47,7 @@ class EDGE:
 
         pos_dim = 3
         # rot_dim = 24 * 6  # 24 joints, 6dof #### AIST
-        rot_dim = 52 * 6  ##### Finedance
+        rot_dim = 22 * 6  ##### Finedance
         self.repr_dim = repr_dim = pos_dim + rot_dim + 4
 
         feature_dim = 35 if use_baseline_feats else 4800
