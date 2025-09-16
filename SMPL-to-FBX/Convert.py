@@ -21,13 +21,13 @@ from SmplObject import SmplObjects
 
 def getArg():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, default="SMPL-to-FBX/motions")
+    parser.add_argument("--input_dir", type=str, default=r"/host_data/van/EDGE/data/motorica/motion/")
     parser.add_argument(
         "--fbx_source_path",
         type=str,
         default="SMPL-to-FBX/ybot.fbx",
     )
-    parser.add_argument("--output_dir", type=str, default="SMPL-to-FBX/fbx_out")
+    parser.add_argument("--output_dir", type=str, default=r"/host_data/van/EDGE/data/motorica/fbx/")
 
     return parser.parse_args()
 

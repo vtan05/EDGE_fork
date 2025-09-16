@@ -35,8 +35,8 @@ def create_dataset(opt):
     print("Slicing test data")
     slice_finedance(test_list, opt.dataset_folder, "test", stride=opt.stride, length=opt.length)
 
-    # baseline_extract("/host_data/van/EDGE/data/finedance/train/wavs_sliced", "/host_data/van/EDGE/data/finedance/train/baseline_feats")
-    # baseline_extract("/host_data/van/EDGE/data/finedance/test/wavs_sliced", "/host_data/van/EDGE/data/finedance/test/baseline_feats")
+    baseline_extract("/host_data/van/EDGE/data/finedance/train/wavs_sliced", "/host_data/van/EDGE/data/finedance/train/baseline_feats")
+    baseline_extract("/host_data/van/EDGE/data/finedance/test/wavs_sliced", "/host_data/van/EDGE/data/finedance/test/baseline_feats")
 
 
 def parse_opt():
