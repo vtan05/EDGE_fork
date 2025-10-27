@@ -3,9 +3,9 @@ import argparse
 
 def parse_train_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--project", default="/host_data/van/EDGE/model/motorica", help="project/name")
-    parser.add_argument("--exp_name", default="exp/motorica", help="save to project/name")
-    parser.add_argument("--data_path", type=str, default="/host_data/van/EDGE/data/motorica", help="raw data path")
+    parser.add_argument("--project", default="/host_data/van/EDGE/model/finedance", help="project/name")
+    parser.add_argument("--exp_name", default="exp/finedance", help="save to project/name")
+    parser.add_argument("--data_path", type=str, default="/host_data/van/EDGE/data/finedance/", help="raw data path")
     parser.add_argument(
         "--processed_data_dir",
         type=str,
@@ -13,7 +13,7 @@ def parse_train_opt():
         help="Dataset backup path",
     )
     parser.add_argument(
-        "--render_dir", type=str, default="/host_data/van/EDGE/model/motorica/renders", help="Sample render path"
+        "--render_dir", type=str, default="/host_data/van/EDGE/model/finedance/renders/", help="Sample render path"
     )
 
     parser.add_argument("--feature_type", type=str, default="baseline")
@@ -49,19 +49,19 @@ def parse_test_opt():
     parser.add_argument(
         "--processed_data_dir",
         type=str,
-        default="/host_data/van/EDGE/data/motorica/",
+        default="/host_data/van/EDGE/data/finedance/",
         help="Dataset backup path",
     )
     parser.add_argument(
-        "--render_dir", type=str, default="/host_data/van/EDGE/model/motorica/renders/test_motorica/", help="Sample render path"
+        "--render_dir", type=str, default="/host_data/van/EDGE/model/finedance/renders/test_finedance/", help="Sample render path"
     )
     parser.add_argument(
-        "--checkpoint", type=str, default="/host_data/van/EDGE/model/motorica/exp/motorica2/weights/train-2000.pt", help="checkpoint"
+        "--checkpoint", type=str, default="/host_data/van/EDGE/model/finedance/exp/finedance/weights/train-800.pt", help="checkpoint"
     )
     parser.add_argument(
         "--music_dir",
         type=str,
-        default="/host_data/van/EDGE/data/motorica/test/wavs_sliced",
+        default="/host_data/van/EDGE/data/finedance/test/wavs_sliced",
         help="folder containing input music",
     )
     parser.add_argument(
@@ -70,7 +70,7 @@ def parse_test_opt():
     parser.add_argument(
         "--motion_save_dir",
         type=str,
-        default="/host_data/van/EDGE/results/motorica/",
+        default="/host_data/van/EDGE/results/finedance/",
         help="Where to save the motions",
     )
     parser.add_argument(

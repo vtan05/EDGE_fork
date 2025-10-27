@@ -165,7 +165,79 @@ class AISTPPDataset(Dataset):
         data = {"pos": all_pos, "q": all_q, "filenames": all_names, "wavs": all_wavs}
         return data
 
-    def process_dataset(self, root_pos, local_q): #### Revised for Finedance
+    # def process_dataset(self, root_pos, local_q): #### Revised for Finedance
+    #     # FK skeleton
+    #     smplx_model = SMPLX_Skeleton()
+    #     # Step 1: Prepare tensors
+    #     root_pos = torch.Tensor(root_pos)          # [B, T, 3]
+    #     bs, seq_len, _ = root_pos.shape
+    #     root_pos = root_pos.view(bs * seq_len, 3)
+
+    #     # ↓↓↓ Select only 22 SMPL joints before converting to axis-angle ↓↓↓
+    #     # List of 22 commonly used SMPL joint indices
+    #     body_joint_indices = [0, 1, 2, 3, 6, 9, 12, 13, 14, 15, 16, 17, 18,
+    #                   19, 20, 21, 4, 5, 7, 8, 10, 11]  # SMPL 22-joint set
+
+    #     # Step 2: Reduce to 22 joints     
+    #     local_q = torch.Tensor(local_q).view(-1, 52, 6)  # [T, 52, 6]
+    #     local_q = local_q[:, body_joint_indices, :]      # [T, 22, 6]
+    #     local_q = ax_from_6v(local_q)                    # [T, 22, 3]
+
+    #     # Step 3: Set root on ground
+    #     length = root_pos.shape[0]
+    #     local_q_66 = local_q.view(bs * seq_len, 66)
+    #     root_pos, local_q_66 = set_on_ground(root_pos, local_q_66, smplx_model)
+
+    #     # Step 4: Forward kinematics (requires full 52 joints → pad back)
+    #     full_local_q = torch.zeros((length, 52, 3), device=local_q.device)
+    #     full_local_q[:, body_joint_indices] = local_q.view(length, 22, 3)
+    #     positions = smplx_model.forward(full_local_q.view(length, 156), root_pos)
+    #     positions = positions.view(length, -1, 3)  # [T, J, 3]
+
+    #     # Step 5: Contact detection (same joint indices)
+    #     feet = positions[:, (7, 8, 10, 11)]  # [T, 4, 3]: L/R ankle and toe
+    #     contacts_ankle = (feet[:, :2, 1] < 0.12).to(local_q.device)
+    #     contacts_toe = (feet[:, 2:, 1] < 0.05).to(local_q.device)
+    #     contacts = torch.cat([contacts_ankle, contacts_toe], dim=-1)  # [T, 4]
+
+    #     # Step 6: Convert back to 6D using only 22 joints
+    #     local_q_22 = local_q.view(length, 22, 3)
+    #     local_q_132 = ax_to_6v(local_q_22).view(length, 132)  # [T, 132]
+
+    #     # Step 7: Reshape everything back to [B, T, D]
+    #     contacts = contacts.view(bs, seq_len, -1).float().detach()
+    #     root_pos = root_pos.view(bs, seq_len, -1).float().detach()
+    #     local_q_132 = local_q_132.view(bs, seq_len, -1).float().detach()
+
+    #     print("contacts.shape", contacts.shape)       # [B, T, 4]
+    #     print("root_pos.shape", root_pos.shape)       # [B, T, 3]
+    #     print("local_q_132.shape", local_q_132.shape) # [B, T, 132]
+
+    #     # now, flatten everything into: batch x sequence x [...]
+    #     l = [contacts, root_pos, local_q_132]
+    #     global_pose_vec_input = vectorize_many(l).float().detach()
+
+    #     # normalize the data. Both train and test need the same normalizer.
+    #     if self.train:
+    #         self.normalizer = Normalizer(global_pose_vec_input)
+    #     else:
+    #         assert self.normalizer is not None
+    #     global_pose_vec_input = self.normalizer.normalize(global_pose_vec_input)
+
+    #     assert not torch.isnan(global_pose_vec_input).any()
+    #     data_name = "Train" if self.train else "Test"
+
+    #     # cut the dataset
+    #     if self.data_len > 0:
+    #         global_pose_vec_input = global_pose_vec_input[: self.data_len]
+
+    #     global_pose_vec_input = global_pose_vec_input
+
+    #     print(f"{data_name} Dataset Motion Features Dim: {global_pose_vec_input.shape}")
+
+    #     return global_pose_vec_input
+
+    def process_dataset(self, root_pos, local_q): #### Revised for Motorica
         # FK skeleton
         smplx_model = SMPLX_Skeleton()
         # Step 1: Prepare tensors
@@ -178,10 +250,10 @@ class AISTPPDataset(Dataset):
         body_joint_indices = [0, 1, 2, 3, 6, 9, 12, 13, 14, 15, 16, 17, 18,
                       19, 20, 21, 4, 5, 7, 8, 10, 11]  # SMPL 22-joint set
 
-        # Step 2: Reduce to 22 joints
-        local_q = torch.Tensor(local_q).view(-1, 52, 6)  # [T, 52, 6]
-        local_q = local_q[:, body_joint_indices, :]      # [T, 22, 6]
-        local_q = ax_from_6v(local_q)                    # [T, 22, 3]
+        # Step 2: Reduce to 22 joints     
+        local_q = torch.Tensor(local_q).view(-1, 24, 3)  # [T, 24, 3]
+        local_q = local_q[:, body_joint_indices, :]      # [T, 22, 3]
+        print("local_q.shape after selecting 22 joints:", local_q.shape)
 
         # Step 3: Set root on ground
         length = root_pos.shape[0]
@@ -189,9 +261,9 @@ class AISTPPDataset(Dataset):
         root_pos, local_q_66 = set_on_ground(root_pos, local_q_66, smplx_model)
 
         # Step 4: Forward kinematics (requires full 52 joints → pad back)
-        full_local_q = torch.zeros((length, 52, 3), device=local_q.device)
+        full_local_q = torch.zeros((length, 24, 3), device=local_q.device)
         full_local_q[:, body_joint_indices] = local_q.view(length, 22, 3)
-        positions = smplx_model.forward(full_local_q.view(length, 156), root_pos)
+        positions = smplx_model.forward(full_local_q.view(length, 72), root_pos)
         positions = positions.view(length, -1, 3)  # [T, J, 3]
 
         # Step 5: Contact detection (same joint indices)
@@ -236,6 +308,7 @@ class AISTPPDataset(Dataset):
         print(f"{data_name} Dataset Motion Features Dim: {global_pose_vec_input.shape}")
 
         return global_pose_vec_input
+
 
 
 class OrderedMusicDataset(Dataset):

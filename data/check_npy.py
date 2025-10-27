@@ -1,7 +1,7 @@
 import numpy as np
 
 # Replace with your actual path
-npy_path = '/host_source/van/EDGE_fork/data/finedance/motion/001.npy'
+npy_path = '/host_data/van/Dance_data_raw/edge_aistpp/motions/gBR_sBM_cAll_d04_mBR0_ch01.pkl'
 
 # Load the .npy file
 data = np.load(npy_path, allow_pickle=True)

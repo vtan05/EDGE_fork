@@ -82,7 +82,7 @@ def parse_eval_opt():
     parser.add_argument(
         "--motion_path",
         type=str,
-        default="/host_data/van/EDGE/results/finedance/",
+        default="/host_data/van/EDGE/results/motorica",
         help="Where to load saved motions",
     )
     parser.add_argument(
